@@ -9,7 +9,7 @@ import javax.servlet.http.HttpServletResponse;
 public class FrontController extends HttpServlet {
     protected void processRequest(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("text/html");
-        response.getWriter().println("<h1>Hello, World!</h1>");
+        response.getWriter().println("<h1>bonjour</h1>");
         response.getWriter().println("<h1>LINK : "+request.getRequestURL()+"</h1>");
     }
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
