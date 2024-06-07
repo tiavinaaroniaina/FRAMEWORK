@@ -1,88 +1,89 @@
-package classes;
+package util;
 
 import java.io.IOException;
-import java.io.PrintWriter;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Set;
 import java.lang.reflect.Method;
-import javax.servlet.ServletConfig;
-import javax.servlet.ServletContext;
+import java.net.http.HttpResponse;
+import java.rmi.server.ServerCloneException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import javax.servlet.*;
+import javax.servlet.http.*;
+import util.Annotation.*;
+import java.lang.annotation.Annotation;
+
 
 public class FrontController extends HttpServlet {
-    private List<Class<?>> controllerClasses;
+    private List<Class<?>> listeController;
+    private HashMap<String,Mapping> urlMapping = new HashMap<>();
 
-    public void init(ServletConfig config) throws ServletException {
-        super.init(config);
-        String pkg = this.getInitParameter("package");
-        controllerClasses = allMappingUrls(pkg);
-    }
-
-    public List<Class<?>> allMappingUrls(String pckg) {
-        controllerClasses = new ArrayList<>();
-
+    public void init(ServletConfig conf) throws ServletException {
+        super.init(conf);
+        String packages = this.getInitParameter("package");
         ServletContext context = getServletContext();
-        String path = "/WEB-INF/classes/" + pckg;
+        listeController = Util.allMappingUrls(packages,util.Annotation.AnnotationController.class,context);
+        urlMapping =Util.getUrlMapping(listeController);
 
-        Set<String> classNames = context.getResourcePaths(path);
-        if (classNames != null) {
-            for (String className : classNames) {
-                if (className.endsWith(".class")) {
-                    String fullClassName = className.substring(0, className.length() - 6);
-                    int taille = fullClassName.split("/").length;
-                    fullClassName = fullClassName.split("/")[taille - 2] + "." + fullClassName.split("/")[taille - 1];
-                    try {
-                        Class<?> myClass = Class.forName(fullClassName);
-                        AnnotationController annotation = myClass.getAnnotation(AnnotationController.class);
-                        if (annotation != null) {
-                            System.out.println("anotation value"+annotation.value());
-                            controllerClasses.add(myClass);
-                        }
-                    } catch (Exception e) {
-                        System.out.println(e);
-                    }
+    }                                                                                                                                                                                               
+    public Object getValue(String methodName, String className){
+        try{
+            Class<?> clas =Class.forName(className);
+            Method method =clas.getMethod(methodName);
+            Object obj = clas.newInstance();
+            return method.invoke(obj);
+        }
+        catch(Exception e){
+            return null;
+        }
+    }
+   
+   
+    public void executeUrl(HttpServletRequest req, HttpServletResponse resp,boolean test) throws ServletException, IOException {
+        resp.getWriter().println("<br>urlMapping:"+urlMapping);
+        for (Map.Entry<String,Mapping> entry : urlMapping.entrySet()) {
+            String url = entry.getKey();
+            Mapping value = entry.getValue();
+            if(url.equals(req.getRequestURI())){
+                Object urlValue=getValue(value.getMethodName(),value.getClassName());
+                resp.getWriter().println("<br>valeur:" + value.getClassName() +"_"+ value.getMethodName());
+                if(urlValue instanceof String s){
+                    resp.getWriter().println("<br>valeur methode:"+s);
                 }
+               
+                test=true;
+                break;
+            }    
+        }
+        if (!test) {
+            resp.getWriter().println("<br>not found");
+        }
+        
+    }
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        processRequest(req, resp);
+    }
+
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        processRequest(req, resp);
+    }
+
+    protected void processRequest(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+         boolean test = false;
+        resp.setContentType("text/html");
+        resp.getWriter().println("<h1> Hello world!!</h1>");
+        resp.getWriter().println("<br><h1>Lien :" + req.getRequestURI() + "</h1>");
+
+        for (Class<?> controllerClass : listeController) {
+            AnnotationController annotation = controllerClass.getAnnotation(util.Annotation.AnnotationController.class);
+            if (annotation != null) {
+                String nameController = controllerClass.getSimpleName();
+                resp.getWriter().println("<br>controller :" + nameController);
+            } else {
+                resp.getWriter().println("<br>Annotation nulle");
             }
         }
-        else{
-            System.out.println("Class Name null");
-        }
-        return controllerClasses;
-    }
-    
-    protected void processRequest(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        response.setContentType("text/plain");
-        try (PrintWriter out = response.getWriter()) {
-            String url = request.getRequestURI();
-            out.println("URL Requested: " + url);
-            
-            out.println(controllerClasses);
-            for (Class<?> controllerClass : controllerClasses) {
-                AnnotationController annotation = controllerClass.getAnnotation(AnnotationController.class);
-                if (annotation != null) {
-                    String controllerName = controllerClass.getSimpleName();
-                    out.println("Controller Found: " + controllerName);
-                } else {
-                    out.println("Annotation null");
-                }
-            }
-        }
-    }
-
-    @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        processRequest(request, response);
-    }
-
-    @Override
-    protected void doPost(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        processRequest(request, response);
+       executeUrl(req,resp,test);
     }
 }

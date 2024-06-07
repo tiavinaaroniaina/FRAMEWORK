@@ -1,22 +1,24 @@
-package classes;
+package  util;
 
 public class Mapping {
-    private String controller;
-    private String method;
-
-    public String getMethod() {
-        return method;
+    String className;
+    String methodName;
+    
+    public String getMethodName() {
+        return methodName;
+    }
+    public void setMethodName(String methodName) {
+        this.methodName = methodName;
+    }
+    public String getClassName() {
+        return className;
+    }
+    public void setClassName(String className) {
+        this.className = className;
+    }
+    public Mapping(String className, String methodName) {
+        this.className = className;
+        this.methodName = methodName;
     }
 
-    public void setMethod(String method) {
-        this.method = method;
-    }
-
-    public String getController() {
-        return controller;
-    }
-
-    public void setController(String controller) {
-        this.controller = controller;
-    }
 }
