@@ -39,7 +39,13 @@ public class FrontController extends HttpServlet {
         }
     }
    
-   
+    public void sendModelView(ModelView model,HttpServletRequest req, HttpServletResponse rep) throws ServletException, IOException{
+        for(Map.Entry<String,Object> entry : model.getData().entrySet()){
+            req.setAttribute(entry.getKey(),entry.getValue());
+        }
+        RequestDispatcher dispatch = req.getRequestDispatcher(model.getUrl());
+        dispatch.forward(req,rep);
+    }  
     public void executeUrl(HttpServletRequest req, HttpServletResponse resp,boolean test) throws ServletException, IOException {
         resp.getWriter().println("<br>urlMapping:"+urlMapping);
         for (Map.Entry<String,Mapping> entry : urlMapping.entrySet()) {
@@ -51,7 +57,9 @@ public class FrontController extends HttpServlet {
                 if(urlValue instanceof String s){
                     resp.getWriter().println("<br>valeur methode:"+s);
                 }
-               
+                else if(urlValue instanceof ModelView m){
+                    sendModelView(m,req,resp);
+                }
                 test=true;
                 break;
             }    
