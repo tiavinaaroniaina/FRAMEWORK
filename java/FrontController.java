@@ -60,12 +60,15 @@ public class FrontController extends HttpServlet {
                 else if(urlValue instanceof ModelView m){
                     sendModelView(m,req,resp);
                 }
+                else{
+                    throw new IllegalArgumentException("unsuported return type : "+urlValue.getClass().getName());
+                }
                 test=true;
                 break;
             }    
         }
         if (!test) {
-            resp.getWriter().println("<br>not found");
+            throw new IllegalArgumentException("URL not Found");
         }
         
     }

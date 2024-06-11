@@ -1,4 +1,5 @@
 package util;
+
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -12,26 +13,41 @@ import util.Annotation.AnnotationController;
 import util.Mapping;
 
 public class Util {
-    public static List listeController;
-     public static HashMap<String,Mapping> getUrlMapping(List<Class<?>> listeController){
-        HashMap<String,Mapping> result = new HashMap<>();
+    public static List<Class<?>> listeController;
+
+    public static HashMap<String, Mapping> getUrlMapping(List<Class<?>> listeController) {
+        HashMap<String, Mapping> result = new HashMap<>();
         for (Class<?> class1 : listeController) {
-            Method[] methodes = class1.getDeclaredMethods();
-            for (Method method : methodes) {
-                if(method.isAnnotationPresent(util.Annotation.Get.class)){
-                    result.put(method.getAnnotation(util.Annotation.Get.class).value(),
-                    new Mapping(class1.getName(),method.getName()));
+            Method[] methods = class1.getDeclaredMethods();
+            for (Method method : methods) {
+                if (method.isAnnotationPresent(util.Annotation.Get.class)) {
+                    String url = method.getAnnotation(util.Annotation.Get.class).value();
+                    if (result.containsKey(url)) {
+                        throw new IllegalArgumentException("Duplicate URL found: " + url);
+                    }
+                    result.put(url, new Mapping(class1.getName(), method.getName()));
                 }
             }
         }
         return result;
     }
-     public static List<Class<?>> allMappingUrls(String packageName, Class<? extends Annotation> annotationClass, ServletContext context) {
+
+    public static List<Class<?>> allMappingUrls(String packageNames, Class<? extends Annotation> annotationClass, ServletContext context) {
         listeController = new ArrayList<>();
-        String path = "/WEB-INF/classes/" + packageName.replace('.', '/');
-    
-        Set<String> classNames = context.getResourcePaths(path);
-        if (classNames != null) {
+        String[] packages = packageNames.split(",");
+        boolean foundPackage = false;
+
+        for (String packageName : packages) {
+            packageName = packageName.trim();
+            String path = "/WEB-INF/classes/" + packageName.replace('.', '/');
+
+            Set<String> classNames = context.getResourcePaths(path);
+            if (classNames == null) {
+                continue; // Try the next package
+            }
+
+            foundPackage = true;
+
             for (String className : classNames) {
                 if (className.endsWith(".class")) {
                     String fullClassName = packageName + "." + className.substring(path.length() + 1, className.length() - 6).replace('/', '.');
@@ -47,10 +63,12 @@ public class Util {
                     }
                 }
             }
-        } else {
-            System.out.println("class null");
         }
+
+        if (!foundPackage) {
+            throw new IllegalArgumentException("None of the specified packages were found or none are in the init parameter: " + packageNames);
+        }
+
         return listeController;
-    }   
-    
+    }
 }

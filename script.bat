@@ -1,7 +1,7 @@
-set "file=FrontController"
-set "package=classes"
+set "name=FrontController"
+set "package=util\*"
 javac -d . java/*.java
 md jar
-jar -cvf jar/%file%.jar %package% *.class 
+jar -cvf jar/%name%.jar  %package%.class
 
 pause
