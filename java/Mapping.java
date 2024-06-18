@@ -1,24 +1,33 @@
-package  util;
+package classes.mvc;
 
 public class Mapping {
-    String className;
-    String methodName;
-    
-    public String getMethodName() {
-        return methodName;
-    }
-    public void setMethodName(String methodName) {
-        this.methodName = methodName;
-    }
-    public String getClassName() {
-        return className;
-    }
-    public void setClassName(String className) {
-        this.className = className;
-    }
-    public Mapping(String className, String methodName) {
-        this.className = className;
-        this.methodName = methodName;
+    private String controller;
+    private String method;
+    private Class[] parameterTypes;
+
+    public String getMethod() {
+        return method;
     }
 
+    public void setMethod(String method) {
+        this.method = method;
+    }
+
+    public String getController() {
+        return controller;
+    }
+
+    public void setController(String controller) {
+        this.controller = controller;
+    }
+
+    public Class[] getParameterTypes() {
+        return parameterTypes;
+    }
+
+    public void setParameterTypes(Class[] parameterTypes) {
+        this.parameterTypes = parameterTypes;
+    }
+    
+    
 }

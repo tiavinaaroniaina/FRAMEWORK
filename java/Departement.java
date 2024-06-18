@@ -1,14 +1,19 @@
 package classes.controllers;
 
-import classes.Annotations.AnnotationController;
-import classes.Annotations.AnnotationMethod;
+import classes.mvc.Annotations.AnnotationController;
+import classes.mvc.Annotations.AnnotationMethod;
 
-@AnnotationController()
+@AnnotationController
 public class Departement {
-    String nom;
-    int numero;
-    @AnnotationMethod("/TEST_FRAMEWORK/listDept")
-    public void getListDepartement(){
-        
-    }
+   String nom;
+   int numero;
+
+   @AnnotationMethod("/TEST_FRAMEWORK/listDept")
+   public String getListDepartement() {
+      return "Calling getListDepartement";
+   }
+   @AnnotationMethod("/TEST_FRAMEWORK/numberDept")
+   public int getNumberDepartement() {
+      return 10;
+   }
 }
