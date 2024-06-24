@@ -89,13 +89,32 @@ public class FrontController extends HttpServlet {
 
         Class<?> paramType = parameters[i].getType();
 
-      
+        // Si le type du paramètre est un objet complexe (non primitif et non String)
+        if (!paramType.isPrimitive() && !paramType.equals(String.class)) {
+            try {
+                Object paramObject = paramType.getDeclaredConstructor().newInstance();
+                Field[] fields = paramType.getDeclaredFields();
+                
+                for (Field field : fields) {
+                    String fieldName = field.getName();
+                    String fieldValue = request.getParameter(paramName + "." + fieldName);
+                    if (fieldValue != null) {
+                        field.setAccessible(true);
+                        Object typedValue = typage(fieldValue, fieldName, field.getType());
+                        field.set(paramObject, typedValue);
+                    }
+                }
+                methodParams[i] = paramObject;
+            } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+                throw new IllegalArgumentException("Error creating parameter object: " + paramName, e);
+            }
+        } else {
             String paramValue = request.getParameter(paramName);
             if (paramValue == null) {
                 throw new IllegalArgumentException("Missing parameter: " + paramName);
             }
             methodParams[i] = typage(paramValue, paramName, paramType);
-       
+        }
     }
     return methodParams;
 }
