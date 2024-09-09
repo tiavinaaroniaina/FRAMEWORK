@@ -1,27 +1,14 @@
 package classes.mvc;
 
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+import classes.mvc.MySession;
+
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Parameter;
-import java.text.AttributedCharacterIterator.Attribute;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.HashMap;
-import javax.servlet.RequestDispatcher;
-import javax.servlet.ServletConfig;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
-import classes.mvc.Mapping;
+import java.lang.reflect.*;
+import java.util.*;
 
 public class FrontController extends HttpServlet {
     private String controllerPackage;
@@ -34,13 +21,14 @@ public class FrontController extends HttpServlet {
             ServletContext context = config.getServletContext();
             this.controllerPackage = context.getInitParameter("base_package");
             this.urlMappings = scanner.scanPackages(controllerPackage);
+            
+            // Log the URL mappings to verify they are loaded correctly
+            System.out.println("URL Mappings loaded: " + this.urlMappings);
         } catch (Exception e) {
-            System.err.println(e);
             e.printStackTrace();
         }
-        
     }
-
+    
     protected void settingAttribute(ModelView mv, HttpServletRequest request) {
         if (mv.getData() instanceof HashMap) {
             HashMap<String, Object> dataMap = (HashMap<String, Object>) mv.getData();
@@ -53,11 +41,13 @@ public class FrontController extends HttpServlet {
             }
         }
     }
-    protected String setStringer(String attribut){
+
+    protected String setStringer(String attribut) {
         return "set" + Character.toUpperCase(attribut.charAt(0)) + attribut.substring(1);
     }
-    protected Object typage(String paramValue ,String paramName, Class paramType){
-        Object o = null ;
+
+    protected Object typage(String paramValue, String paramName, Class<?> paramType) {
+        Object o = null;
         if (paramType == Date.class || paramType == java.sql.Date.class) {
             try {
                 o = java.sql.Date.valueOf(paramValue);
@@ -69,66 +59,73 @@ public class FrontController extends HttpServlet {
         } else if (paramType == double.class) {
             o = Double.parseDouble(paramValue);
         } else if (paramType == boolean.class) {
-            o =Boolean.parseBoolean(paramValue);
+            o = Boolean.parseBoolean(paramValue);
         } else {
-            o = paramValue; 
+            o = paramValue;
         }
         return o;
     }
+
     protected Object[] getMethodParams(Method method, HttpServletRequest request) throws IllegalArgumentException {
-    Parameter[] parameters = method.getParameters();
-    Object[] methodParams = new Object[parameters.length];
+        Parameter[] parameters = method.getParameters();
+        Object[] methodParams = new Object[parameters.length];
+        
+        for (int i = 0; i < parameters.length; i++) {
+            String paramName = "";
+            Class<?> paramType = parameters[i].getType();
+            if(paramType==MySession.class)
+            {
+               methodParams[i]=new MySession(request.getSession());
+               continue;
+            }
+            if (parameters[i].isAnnotationPresent(Annotations.AnnotationParameter.class)) {
+                paramName = parameters[i].getAnnotation(Annotations.AnnotationParameter.class).value();
+            } else {
+                paramName = parameters[i].getName();
+                throw new IllegalArgumentException(" ERROR ANNOTATION ETU002751 test: " + paramName);
+            }
 
-    for (int i = 0; i < parameters.length; i++) {
-        String paramName = "";
-        if (parameters[i].isAnnotationPresent(Annotations.AnnotationParameter.class)) {
-            paramName = parameters[i].getAnnotation(Annotations.AnnotationParameter.class).value();
-        } else {
-            paramName = parameters[i].getName();
-        }
 
-        Class<?> paramType = parameters[i].getType();
+            if (paramType == MySession.class) {
+                methodParams[i] = new MySession(request.getSession());
+            } else if (!paramType.isPrimitive() && !paramType.equals(String.class)) {
+                try {
+                    Object paramObject = paramType.getDeclaredConstructor().newInstance();
+                    Field[] fields = paramType.getDeclaredFields();
 
-        // Si le type du paramètre est un objet complexe (non primitif et non String)
-        if (!paramType.isPrimitive() && !paramType.equals(String.class)) {
-            try {
-                Object paramObject = paramType.getDeclaredConstructor().newInstance();
-                Field[] fields = paramType.getDeclaredFields();
-                
-                for (Field field : fields) {
-                    String fieldName = field.getName();
-                    String fieldValue = request.getParameter(paramName + "." + fieldName);
-                    if (fieldValue != null) {
-                        field.setAccessible(true);
-                        Object typedValue = typage(fieldValue, fieldName, field.getType());
-                        field.set(paramObject, typedValue);
+                    for (Field field : fields) {
+                        String fieldName = field.getName();
+                        String fieldValue = request.getParameter(paramName + "." + fieldName);
+                        if (fieldValue != null) {
+                            field.setAccessible(true);
+                            Object typedValue = typage(fieldValue, fieldName, field.getType());
+                            field.set(paramObject, typedValue);
+                        }
                     }
+                    methodParams[i] = paramObject;
+                } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+                    throw new IllegalArgumentException("Error creating parameter object: " + paramName, e);
                 }
-                methodParams[i] = paramObject;
-            } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
-                throw new IllegalArgumentException("Error creating parameter object: " + paramName, e);
+            } else {
+                String paramValue = request.getParameter(paramName);
+                if (paramValue == null) {
+                    throw new IllegalArgumentException("Missing parameter: " + paramName);
+                }
+                methodParams[i] = typage(paramValue, paramName, paramType);
             }
-        } else {
-            String paramValue = request.getParameter(paramName);
-            if (paramValue == null) {
-                throw new IllegalArgumentException("Missing parameter: " + paramName);
-            }
-            methodParams[i] = typage(paramValue, paramName, paramType);
         }
+        return methodParams;
     }
-    return methodParams;
-}
 
-    
     protected void callMethod(Mapping mapping, PrintWriter out, HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         try {
             Class<?> clazz = Class.forName(mapping.getController());
-            Object object = clazz.newInstance(); 
+            Object object = clazz.getDeclaredConstructor().newInstance();
 
             Method method = clazz.getMethod(mapping.getMethod(), mapping.getParameterTypes());
             method.setAccessible(true);
 
-            Object[] methodParams = getMethodParams(method,request); 
+            Object[] methodParams = getMethodParams(method, request);
             Object result = method.invoke(object, methodParams);
 
             if (result instanceof String) {
@@ -166,10 +163,9 @@ public class FrontController extends HttpServlet {
 
             out.println("</ul>");
         } else {
-            throw new IllegalArgumentException("URL not found :" +requestURI);
+            throw new IllegalArgumentException("URL not found :" + requestURI);
         }
     }
-
     protected void processRequest(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("text/html");
         if (this.urlMappings != null) {
@@ -183,22 +179,26 @@ public class FrontController extends HttpServlet {
                 out.println("<ul>");
                 for (Map.Entry<String, Mapping> entry : urlMappings.entrySet()) {
                     out.println("<li>URL: " + entry.getKey() + ", Controller: " + entry.getValue().getController() + ", Method: " + entry.getValue().getMethod() + 
-                    ", Parameter Types : " + Arrays.toString(entry.getValue().getParameterTypes()) +"</li>");
+                    ", Parameter Types : " + Arrays.toString(entry.getValue().getParameterTypes()) + "</li>");
                 }
                 out.println("</ul>");
+    
+                // Log the request URI to verify it matches a defined mapping
+                System.out.println("Processing request for URI: " + requestURI);
+    
                 this.validateMapping(mapping, out, request, response);
             } catch (Exception e) {
-                e.printStackTrace(response.getWriter());    
+                e.printStackTrace(response.getWriter());
             }
         }
     }
     
 
-   protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-      this.processRequest(request, response);
-   }
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        this.processRequest(request, response);
+    }
 
-   protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-      this.processRequest(request, response);
-   }
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        this.processRequest(request, response);
+    }
 }
