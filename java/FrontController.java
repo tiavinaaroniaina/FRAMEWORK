@@ -93,11 +93,12 @@ public class FrontController extends HttpServlet {
                     request.setAttribute("errors", validationErrors);
                     request.setAttribute("formData", param); // Conserver les valeurs des champs
                     
-                    // Récupérer la vue d'origine (soit via Mapping, soit via Referer)
+                    // Récupérer la vue d'origine (soit via Mapping, soit via Referer ou session)
                     String referer = request.getHeader("Referer");
-                    mapping.setViewOnError("formulaire.jsp");
+                    String lastView = (String) request.getSession().getAttribute("lastView");
+                    mapping.setViewOnError(lastView != null ? lastView : "formulaire.jsp"); // If lastView exists, use it, otherwise fall back to formulaire.jsp
                     String viewOnError = mapping.getViewOnError();
-                    
+
                     // Utiliser la vue ou le referer pour rediriger
                     String targetView = (viewOnError != null && !viewOnError.trim().isEmpty())
                                         ? viewOnError
