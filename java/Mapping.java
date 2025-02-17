@@ -4,6 +4,8 @@ public class Mapping {
     private String controller;
     private String method;
     private Class[] parameterTypes;
+    private String session;
+    
 
     public String getMethod() {
         return method;
@@ -28,6 +30,13 @@ public class Mapping {
     public void setParameterTypes(Class[] parameterTypes) {
         this.parameterTypes = parameterTypes;
     }
-    
+
+    public String getSession() {
+        return session;
+    }
+
+    public void setSession(String session) {
+        this.session = session;
+    }
     
 }

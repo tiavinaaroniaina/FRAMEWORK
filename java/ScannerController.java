@@ -1,10 +1,13 @@
 package classes.mvc;
 
+import classes.mvc.Mapping;
+import classes.mvc.Session;
 import classes.mvc.Annotations.AnnotationController;
 import classes.mvc.Annotations.AnnotationMethod;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLDecoder;
@@ -85,10 +88,18 @@ public class ScannerController {
                             if (existingMappings.containsKey(url)) {
                                 throw new IllegalArgumentException("Duplicate URL detected: " + url);
                             }
+                            
                             Mapping mapping = new Mapping();
                             mapping.setController(clazz.getName());
                             mapping.setMethod(method.getName());
                             mapping.setParameterTypes(method.getParameterTypes());
+                            mapping.setSession(null);
+                            for (Field field : clazz.getDeclaredFields()) {
+                                field.setAccessible(true);
+                                if (field.getType() == Session.class) {
+                                    mapping.setSession(field.getName());
+                                }
+                            }
                             classes.put(url, mapping);
                             existingMappings.put(url, mapping);
                         }
