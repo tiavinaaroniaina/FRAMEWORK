@@ -7,18 +7,30 @@ public class Mapping {
     private String session;
     private boolean restApi;
     private String verb;
-    private String url; // New field for URL
+    private String url; // URL associée
+    private String viewOnError; // Vue à utiliser en cas d'erreur
 
-    // Getter for URL
+    // Getter pour URL
     public String getUrl() {
         return url;
     }
 
-    // Setter for URL
+    // Setter pour URL
     public void setUrl(String url) {
         this.url = url;
     }
 
+    // Getter pour viewOnError
+    public String getViewOnError() {
+        return viewOnError;
+    }
+
+    // Setter pour viewOnError
+    public void setViewOnError(String viewOnError) {
+        this.viewOnError = viewOnError;
+    }
+
+    // Indique si c'est une API REST
     public boolean isRestApi() {
         return restApi;
     }
@@ -59,11 +71,11 @@ public class Mapping {
         this.session = session;
     }
 
-    public String getVerb() { // Accessor for the verb
+    public String getVerb() { // Accesseur pour le verbe HTTP
         return verb;
     }
 
-    public void setVerb(String verb) { // Mutator for the verb
+    public void setVerb(String verb) { // Mutateur pour le verbe HTTP
         this.verb = verb;
     }
 }

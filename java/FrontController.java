@@ -15,14 +15,6 @@ import java.util.Map;
 import java.util.Set;
 import javax.servlet.*;
 import javax.servlet.http.*;
-import javax.servlet.RequestDispatcher;
-import javax.servlet.ServletConfig;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.Part;
 import javax.servlet.annotation.MultipartConfig;
 
 import com.google.gson.Gson;
@@ -31,34 +23,33 @@ import com.google.gson.Gson;
 public class FrontController extends HttpServlet {
     private String controllerPackage;
     private ScannerController scanner = new ScannerController();
-    private Map<String, List<Mapping>> urlMappings; // Change to List<Mapping> to handle multiple verbs
+    private Map<String, List<Mapping>> urlMappings;
 
+    @Override
     public void init(ServletConfig config) throws ServletException {
         super.init(config);
         ServletContext context = config.getServletContext();
         this.controllerPackage = context.getInitParameter("base_package");
         try {
             this.urlMappings = scanner.scanPackages(controllerPackage);
-            validateMappings(); // Call validate after scanning
+            validateMappings(); // Validate after scanning
         } catch (ClassNotFoundException | IOException e) {
-            e.printStackTrace(); // Log the error or handle it appropriately
+            e.printStackTrace(); 
+        } catch (IllegalAccessException e) {
+            throw new ServletException("Error accessing class methods", e);
         }
     }
 
-    // New method to validate mappings for duplicates
     private void validateMappings() {
         Map<String, Set<String>> urlVerbMap = new HashMap<>();
 
         for (Map.Entry<String, List<Mapping>> entry : urlMappings.entrySet()) {
             String url = entry.getKey();
             for (Mapping mapping : entry.getValue()) {
-                String verb = mapping.getVerb(); // Get the verb
+                String verb = mapping.getVerb(); 
 
-                // Check for duplicate URL and verb
                 Set<String> verbs = urlVerbMap.computeIfAbsent(url, k -> new HashSet<>());
-
-                // If the verb already exists, throw an exception
-                if (!verbs.add(verb)) { // add returns false if the item was already in the set
+                if (!verbs.add(verb)) {
                     throw new IllegalArgumentException(ErrorCode.getErrorMessage(ErrorCode.DUPLICATE_MAPPING));
                 }
             }
@@ -71,7 +62,6 @@ public class FrontController extends HttpServlet {
         if (mapping != null) {
             try {
                 String requestMethod = request.getMethod();
-                // Ensure the request method matches the mapping verb
                 if (!mapping.getVerb().equalsIgnoreCase(requestMethod)) {
                     throw new IllegalArgumentException(ErrorCode.getErrorMessage(ErrorCode.METHOD_NOT_ALLOWED));
                 }
@@ -85,49 +75,63 @@ public class FrontController extends HttpServlet {
         }
     }
 
-    protected void callMethod(Mapping mapping, PrintWriter out, HttpServletRequest request,
-            HttpServletResponse response) throws ServletException, IOException {
+    protected void callMethod(Mapping mapping, PrintWriter out, HttpServletRequest request, HttpServletResponse response)
+        throws ServletException, IOException {
         try {
             Class<?> clazz = Class.forName(mapping.getController());
             Object object = clazz.getDeclaredConstructor().newInstance();
 
-            if (mapping.getSession() != null) {
-                Field field = object.getClass().getDeclaredField(mapping.getSession());
-                field.setAccessible(true);
-                field.set(object, new Session(request.getSession()));
-            }
-
             Method method = clazz.getMethod(mapping.getMethod(), mapping.getParameterTypes());
             method.setAccessible(true);
             Object[] methodParams = getMethodParams(method, request);
-            Object result = method.invoke(object, methodParams);
 
-            // Handle the result of the invoked method
+            // Validation des paramètres avant d'invoquer la méthode
+            Map<String, String> validationErrors = new HashMap<>();
+            for (Object param : methodParams) {
+                if (param != null && !performValidation(param, validationErrors)) {
+                    // Erreurs trouvées, renvoyer au formulaire
+                    request.setAttribute("errors", validationErrors);
+                    request.setAttribute("formData", param); // Conserver les valeurs des champs
+                    
+                    // Récupérer la vue d'origine (soit via Mapping, soit via Referer)
+                    String referer = request.getHeader("Referer");
+                    mapping.setViewOnError("formulaire.jsp");
+                    String viewOnError = mapping.getViewOnError();
+                    
+                    // Utiliser la vue ou le referer pour rediriger
+                    String targetView = (viewOnError != null && !viewOnError.trim().isEmpty())
+                                        ? viewOnError
+                                        : (referer != null ? referer : "error.jsp");
+
+                    RequestDispatcher dispatcher = request.getRequestDispatcher(targetView);
+                    dispatcher.forward(request, response);
+                    return;
+                }
+            }
+
+            Object result = method.invoke(object, methodParams);
             handleResult(result, mapping, request, response, out);
         } catch (Exception e) {
+            // Redirect to last view in case of error
+            HttpSession session = request.getSession();
+            String lastView = (String) session.getAttribute("lastView");
+            String targetView = (lastView != null) ? lastView : "error.jsp";
+
             request.setAttribute("error", e.getMessage());
-            RequestDispatcher dispatcher = request.getRequestDispatcher("error.jsp");
+            RequestDispatcher dispatcher = request.getRequestDispatcher(targetView);
             dispatcher.forward(request, response);
         }
     }
 
     protected void handleResult(Object result, Mapping mapping, HttpServletRequest request,
             HttpServletResponse response, PrintWriter out) throws IOException, ServletException {
+        HttpSession session = request.getSession();
         if (result instanceof String) {
-            String resultString = (String) result;
-            if (mapping.isRestApi()) {
-                response.setContentType("application/json");
-                Map<String, String> responseMap = new HashMap<>();
-                responseMap.put("result", resultString);
-                response.getWriter().write(new Gson().toJson(responseMap));
-                response.getWriter().flush();
-                return;
-            } else {
-                out.println("<li>Results: " + resultString + "</li>");
-                out.println("<li>Type: " + resultString.getClass().getName() + "</li>");
-            }
+            // Logique existante pour les String
+            session.setAttribute("lastView", result); // Sauvegarde de la vue
         } else if (result instanceof ModelView) {
             ModelView modelView = (ModelView) result;
+            session.setAttribute("lastView", modelView.getUrl()); // Sauvegarde de l'URL du ModelView
             if (mapping.isRestApi()) {
                 response.setContentType("application/json");
                 Map<String, Object> responseMap = new HashMap<>();
@@ -144,6 +148,40 @@ public class FrontController extends HttpServlet {
         } else {
             throw new IllegalArgumentException(ErrorCode.getErrorMessage(ErrorCode.UNSUPPORTED_TYPE));
         }
+    }
+
+    private boolean performValidation(Object obj, Map<String, String> validationErrors) {
+        boolean isValid = true;
+        for (Field field : obj.getClass().getDeclaredFields()) {
+            field.setAccessible(true);
+    
+            if (field.isAnnotationPresent(Validation.Length.class)) {
+                Validation.Length length = field.getAnnotation(Validation.Length.class);
+                try {
+                    String value = (String) field.get(obj);
+                    if (value != null && (value.length() < length.min() || value.length() > length.max())) {
+                        validationErrors.put(field.getName(), length.message());
+                        isValid = false;
+                    }
+                } catch (IllegalAccessException e) {
+                    e.printStackTrace();
+                }
+            }
+    
+            if (field.isAnnotationPresent(Validation.Value.class)) {
+                Validation.Value value = field.getAnnotation(Validation.Value.class);
+                try {
+                    int intValue = field.getInt(obj);
+                    if (intValue < value.min() || intValue > value.max()) {
+                        validationErrors.put(field.getName(), value.message());
+                        isValid = false;
+                    }
+                } catch (IllegalAccessException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        return isValid;
     }
 
     protected void settingAttribute(ModelView mv, HttpServletRequest request) {
@@ -180,7 +218,6 @@ public class FrontController extends HttpServlet {
         byte[] fileContent = filePart.getInputStream().readAllBytes();
 
         String uploadDir = request.getServletContext().getRealPath("") + "uploads/" + fileName;
-        System.out.println("upload = " + uploadDir);
 
         File uploadFolder = new File(uploadDir);
         if (!uploadFolder.exists()) {
@@ -188,7 +225,6 @@ public class FrontController extends HttpServlet {
         }
 
         String uploadPath = uploadDir + File.separator + fileName;
-        System.out.println("upload = " + uploadPath);
 
         filePart.write(uploadPath);
 
@@ -216,7 +252,6 @@ public class FrontController extends HttpServlet {
                     ? parameters[i].getAnnotation(Annotations.AnnotationParameter.class).value()
                     : parameters[i].getName();
 
-            // Handling file upload (Part type)
             if (paramType == FileUpload.class) {
                 try {
                     methodParams[i] = handleFileUpload(request, paramName);

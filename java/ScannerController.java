@@ -13,7 +13,8 @@ public class ScannerController {
 
     // Adjusted to return Map<String, List<Mapping>> to allow multiple mappings per
     // URL
-    public Map<String, List<Mapping>> scanPackages(String packages) throws ClassNotFoundException, IOException {
+    public Map<String, List<Mapping>> scanPackages(String packages)
+            throws ClassNotFoundException, IOException, IllegalAccessException {
         if (packages == null || packages.trim().isEmpty()) {
             throw new IllegalArgumentException("Packages cannot be null or empty");
         }
@@ -36,7 +37,8 @@ public class ScannerController {
 
     // Adjusted to return Map<String, List<Mapping>> to store multiple mappings for
     // the same URL
-    private Map<String, List<Mapping>> scanPackage(String packageName) throws ClassNotFoundException, IOException {
+    private Map<String, List<Mapping>> scanPackage(String packageName)
+            throws ClassNotFoundException, IOException, IllegalAccessException {
         Map<String, List<Mapping>> controllers = new HashMap<>();
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
         assert classLoader != null;
@@ -76,12 +78,12 @@ public class ScannerController {
     // for the same URL
     private Map<String, List<Mapping>> findClasses(File directory, String packageName,
             Map<String, List<Mapping>> existingMappings)
-            throws ClassNotFoundException {
+            throws ClassNotFoundException, IllegalAccessException {
         Map<String, List<Mapping>> classes = new HashMap<>();
         if (!directory.exists()) {
             return classes;
         }
-        
+
         File[] files = directory.listFiles();
         assert files != null;
         for (File file : files) {
@@ -116,6 +118,12 @@ public class ScannerController {
                             mapping.setSession(null);
                             mapping.setRestApi(method.isAnnotationPresent(Annotations.RestApi.class));
                             mapping.setVerb(verbMethod.getVerb());
+                            mapping.setUrl(url); // Set the URL
+
+                            // Validate the mapping before adding it to the list
+                            if (!Validation.validate(mapping)) {
+                                throw new IllegalArgumentException("Invalid mapping for URL: " + url);
+                            }
 
                             for (Field field : clazz.getDeclaredFields()) {
                                 field.setAccessible(true);
@@ -143,7 +151,6 @@ public class ScannerController {
                                 mappingList.add(mapping);
                                 existingMappings.put(url, mappingList);
                             }
-
                         }
                     }
                 }
