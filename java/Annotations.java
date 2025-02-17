@@ -16,4 +16,8 @@ public class Annotations {
     public @interface AnnotationParameter {
         String value(); 
     }
+    @Retention(RetentionPolicy.RUNTIME)
+    public @interface RestApi {
+        String value() default ""; 
+    }
 }
